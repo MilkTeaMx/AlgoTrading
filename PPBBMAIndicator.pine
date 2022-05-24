@@ -1,0 +1,196 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+
+//@version=5
+indicator("MA + BB + PP", overlay=true, precision=3)
+
+transparent = color.rgb(0, 0, 0, 100) 
+
+//MA
+green = #6cdf23
+plotMA   = input.bool(title="Plot MA", defval=true)
+maLengthInput = input.int(title="MA Length", defval=50, minval=5, maxval=200, step=5)
+sma = ta.sma(close, maLengthInput)
+plot(sma, color= plotMA ? green : transparent)
+
+
+//BB
+transparentBlue = color.rgb(159, 216, 251, 85)
+plotBB   = input.bool(title="Plot BB", defval=true)
+bbLengthInput = input.int(title="BB Length", defval=20, minval=5, maxval=200, step=5)
+[middle, upper, lower] = ta.bb(close, 20, 2)
+plot(middle, color= plotBB ? color.purple : transparent)
+upperPlot = plot(upper, color= plotBB ? color.blue : transparent)
+lowerPlot = plot(lower, color= plotBB ? color.blue : transparent)
+fill(upperPlot, lowerPlot, color= plotBB ? transparentBlue : transparent)
+
+//PP
+// Function outputs 1 when it's the first bar of the D/W/M/Y
+is_newbar(res) =>
+    ch = 0
+    if(res == 'Y')
+        t  = year(time('D'))
+        ch := ta.change(t) != 0 ? 1 : 0
+    else
+        t = time(res)
+        ch := ta.change(t) != 0 ? 1 : 0
+    ch
+
+// Rounding levels to min tick
+nround(x) => 
+    n = math.round(x / syminfo.mintick) * syminfo.mintick
+
+//Inputs
+plotPP                 = input.bool(title = "Plot PP", defval = true)
+pp_period              = input.timeframe(title = "Period", defval = "Day", options = ['Day', 'Week', 'Month', 'Year'])
+show_historical_levels = input.bool(title = "Show Historical Levels?",  defval = false)
+show_level_value       = input.bool(title = "Show Levels Value?",       defval = true)
+show_current_levels    = input.bool(title = "Show Current Levels",      defval = false)
+
+plotS1R1 = input.bool(title="Plot S1 and R1", defval=true)
+plotS2R2 = input.bool(title="Plot S2 and R2", defval=true)
+plotS3R3 = input.bool(title="Plot S3 and R3", defval=false)
+
+pp_res = pp_period == 'Day' ? 'D' : pp_period == 'Week' ? 'W' : pp_period == 'Month' ? 'M' : 'Y' 
+
+// Calc Open
+open_cur = 0.0
+open_cur := is_newbar(pp_res) ? open : open_cur[1]
+
+popen = 0.0
+popen := is_newbar(pp_res) ? open_cur[1] : popen[1]
+
+// Calc High
+high_cur = 0.0
+high_cur := is_newbar(pp_res) ? high : math.max(high_cur[1], high)
+
+phigh = 0.0
+phigh := is_newbar(pp_res) ? high_cur[1] : phigh[1]
+
+// Calc Low
+low_cur = 0.0
+low_cur := is_newbar(pp_res) ? low : math.min(low_cur[1], low)
+
+plow = 0.0
+plow := is_newbar(pp_res) ? low_cur[1] : plow[1]
+
+// Calc Close
+pclose = 0.0
+pclose := is_newbar(pp_res) ? close[1] : pclose[1]
+
+
+////////////////////////////
+// CALCULATE PIVOT POINTS //
+////////////////////////////
+
+PP = 0.0
+R1 = 0.0, R2 = 0.0, R3 = 0.0
+S1 = 0.0, S2 = 0.0, S3 = 0.0
+
+
+PP := (phigh + plow + pclose) / 3
+R1 := PP     + (PP   - plow)
+S1 := PP     - (phigh - PP)
+R2 := PP     + (phigh - plow)
+S2 := PP     - (phigh - plow)
+R3 := phigh  + 2 * (PP   - plow) 
+S3 := plow   - 2 * (phigh - PP) 
+  
+
+ 
+// Projected levels
+
+prPP = 0.0
+prR1 = 0.0, prR2 = 0.0, prR3 = 0.0
+prS1 = 0.0, prS2 = 0.0, prS3 = 0.0
+  
+
+prPP := (high_cur + low_cur + close) / 3
+prR1 := prPP     + (prPP   - low_cur)
+prS1 := prPP     - (high_cur - PP)
+prR2 := prPP     + (high_cur - low_cur)
+prS2 := prPP     - (high_cur - low_cur)
+prR3 := phigh  + 2 * (prPP   - low_cur) 
+prS3 := plow   - 2 * (high_cur - PP)   
+  
+//////////////
+// PLOTTING //
+
+bars_sinse = 0
+bars_sinse := is_newbar(pp_res) ? 0 : bars_sinse[1] + 1
+ 
+vpp_p = line.new(bar_index[math.min(bars_sinse, 4999)], PP, bar_index+10, PP, color=(plotPP and plotS1R1) ? color.gray : transparent,  style =  line.style_solid, extend = extend.none)
+vs1_p = line.new(bar_index[math.min(bars_sinse, 4999)], S1, bar_index+10, S1, color=(plotPP and plotS1R1) ? color.red : transparent,   style =  line.style_solid, extend = extend.none)
+vs2_p = line.new(bar_index[math.min(bars_sinse, 4999)], S2, bar_index+10, S2, color=(plotPP and plotS2R2) ? color.red : transparent,   style =  line.style_solid, extend = extend.none)
+vs3_p = line.new(bar_index[math.min(bars_sinse, 4999)], S3, bar_index+10, S3, color=(plotPP and plotS3R3) ? color.red : transparent,   style =  line.style_solid, extend = extend.none)
+vr1_p = line.new(bar_index[math.min(bars_sinse, 4999)], R1, bar_index+10, R1, color=(plotPP and plotS1R1) ? color.green : transparent, style =  line.style_solid, extend = extend.none)
+vr2_p = line.new(bar_index[math.min(bars_sinse, 4999)], R2, bar_index+10, R2, color=(plotPP and plotS2R2) ? color.green : transparent, style =  line.style_solid, extend = extend.none)
+vr3_p = line.new(bar_index[math.min(bars_sinse, 4999)], R3, bar_index+10, R3, color=(plotPP and plotS3R3) ? color.green : transparent, style =  line.style_solid, extend = extend.none)
+
+// delete previous lines in the same period
+if (not is_newbar(pp_res) or not show_historical_levels)
+    line.delete(vpp_p[1])
+    line.delete(vs1_p[1]) 
+    line.delete(vs2_p[1])  
+    line.delete(vs3_p[1])  
+    line.delete(vr1_p[1]) 
+    line.delete(vr2_p[1])  
+    line.delete(vr3_p[1]) 
+
+
+// Add labels
+
+if (plotPP)
+    if (plotS1R1)
+        label_vpp = label.new(bar_index+10, PP, text=show_level_value ? ("P"  + " " + str.tostring(nround(PP))) : "P",  style= label.style_none)
+        label_vs1 = label.new(bar_index+10, S1, text=show_level_value ? ("S1" + " " + str.tostring(nround(S1))) : "S1", style= label.style_none)
+        label_vr1 = label.new(bar_index+10, R1, text=show_level_value ? ("R1" + " " + str.tostring(nround(R1))) : "R1", style= label.style_none)
+        
+        label.delete(label_vpp[1])
+        label.delete(label_vs1[1])
+        label.delete(label_vr1[1])
+        
+    if (plotS2R2)
+        
+        label_vs2 = label.new(bar_index+10, S2, text=show_level_value ? ("S2" + " " + str.tostring(nround(S2))) : "S2", style= label.style_none)
+        label_vr2 = label.new(bar_index+10, R2, text=show_level_value ? ("R2" + " " + str.tostring(nround(R2))) : "R2", style= label.style_none)
+        label.delete(label_vs2[1])
+        label.delete(label_vr2[1])
+     
+    if (plotS3R3)   
+        label_vs3 = label.new(bar_index+10, S3, text=show_level_value ? ("S3" + " " + str.tostring(nround(S3))) : "S3", style= label.style_none)
+        label_vr3 = label.new(bar_index+10, R3, text=show_level_value ? ("R3" + " " + str.tostring(nround(R3))) : "R3", style= label.style_none)
+        label.delete(label_vs3[1])
+        label.delete(label_vr3[1])    
+   
+    
+    
+    
+// Projected levels    
+line vpp_pr = na
+line vs1_pr = na
+line vs2_pr = na
+line vs3_pr = na
+line vr1_pr = na
+line vr2_pr = na
+line vr3_pr = na
+
+if (show_current_levels)
+    
+    vpp_pr = line.new(bar_index[1], prPP, bar_index, prPP, color=(plotPP and plotS1R1) ? color.gray : transparent,  style =  line.style_dashed, extend = extend.right)
+    vs1_pr = line.new(bar_index[1], prS1, bar_index, prS1, color=(plotPP and plotS1R1) ? color.red : transparent,   style =  line.style_dashed, extend = extend.right)
+    vs2_pr = line.new(bar_index[1], prS2, bar_index, prS2, color=(plotPP and plotS2R2) ? color.red : transparent,   style =  line.style_dashed, extend = extend.right)
+    vs3_pr = line.new(bar_index[1], prS3, bar_index, prS3, color=(plotPP and plotS3R3) ? color.red : transparent,   style =  line.style_dashed, extend = extend.right)
+    vr1_pr = line.new(bar_index[1], prR1, bar_index, prR1, color=(plotPP and plotS1R1) ? color.green : transparent, style =  line.style_dashed, extend = extend.right)
+    vr2_pr = line.new(bar_index[1], prR2, bar_index, prR2, color=(plotPP and plotS2R2) ? color.green : transparent, style =  line.style_dashed, extend = extend.right)
+    vr3_pr = line.new(bar_index[1], prR3, bar_index, prR3, color=(plotPP and plotS3R3) ? color.green : transparent, style =  line.style_dashed, extend = extend.right)
+        
+    line.delete(vpp_pr[1])
+    line.delete(vs1_pr[1])
+    line.delete(vs2_pr[1])
+    line.delete(vs3_pr[1])
+    line.delete(vr1_pr[1])
+    line.delete(vr2_pr[1])
+    line.delete(vr3_pr[1])
+
+
+
